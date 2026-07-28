@@ -18,7 +18,7 @@ def add_note(content, tag):
         new_id = 1
     else:
         new_id = int(max(notes, key=lambda note: note["note_id"])["note_id"]) + 1
-    new_note_dict = {"note_id": new_id, "content": content, "tag": tag, "created_at": datetime.datetime.now().isoformat()}
+    new_note_dict = {"note_id": new_id, "content": content, "tag": tag, "created_at": datetime.datetime.now().isoformat(), "synced": False}
     notes.append(new_note_dict)
     return save_notes(notes)
 
@@ -47,6 +47,25 @@ def delete_notes(id):
     results = [note for note in notes if note["note_id"] != id]
     return save_notes(results)
 
+from roam import call_roam_api, get_today_uid
+
+def sync_notes():
+    notes = load_notes()
+    for note in notes:
+        if not note.get("synced", False): 
+            note_for_roam = f"{note["content"]} #{note["tag"]}"
+            call_roam_api("data.block.fromMarkdown", [
+                {
+                    "location": {"parent-uid": get_today_uid(), "order": "last"},
+                    "markdown-string": note_for_roam,
+                    }
+            ])
+            note["synced"] = True
+        else:
+            continue
+    return save_notes(notes)
+
+
 import argparse
 
 if __name__ == "__main__":
@@ -66,6 +85,9 @@ if __name__ == "__main__":
     delete_parser = subparsers.add_parser("delete")
     delete_parser.add_argument("id", type=int)
 
+    sync_parser = subparsers.add_parser("sync")
+
+
     args = parser.parse_args()
 
     if args.command == "add":
@@ -78,8 +100,9 @@ if __name__ == "__main__":
         for note in search_notes(args.keyword, args.tag):
             print(note)
         
-
     if args.command == "delete":
         delete_notes(args.id)
 
-    
+    if  args.command == "sync":
+        sync_notes()
+
